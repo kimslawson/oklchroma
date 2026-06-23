@@ -1,26 +1,13 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
 import ColorPatternGenerator from '../components/color-pattern-generator/color-pattern-generator';
-import Webmentions from '../components/webmentions/webmentions.astro';
 import '../styles/main.css';
 ---
 
 <Layout title="Oklchroma - OKLCH Color Pattern Generator">
-	<nav>
-		<ul>
-			<li><a href="/" class="active">Editor</a></li>
-			<li><a href="/about">About</a></li>
-		</ul>
-		<div class="buy-coffee">
-			<script type='text/javascript' src='https://storage.ko-fi.com/cdn/widget/Widget_2.js'></script><script type='text/javascript'>kofiwidget2.init('Buy me a coffee', 'var(--color-primary-500)', 'H2H2ZNUST');kofiwidget2.draw();</script>
-			</div>
-	</nav>
-	<main>
-		<div class="container">
-			<h1 class="title">Oklchroma</h1>
-		</div>
-
+	<Header activePage="editor" />
+	<main class="app-layout">
 		<ColorPatternGenerator client:load />
-		<!--<Webmentions />-->
 	</main>
 </Layout>
