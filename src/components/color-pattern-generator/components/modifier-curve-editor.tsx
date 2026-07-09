@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent } from "react";
 import { getCurveMultiplier, MODIFIER_CURVE_PRESETS, sanitizeModifierCurve } from "../utils/color";
+import EditableValue from "./editable-value.tsx";
 
 interface ModifierCurveEditorProps {
     baseModifier: number;
@@ -177,7 +178,14 @@ export default function ModifierCurveEditor({
                     <label className="input-label">
                         Base Chroma Floor <span className="input-label-note">min at extremes</span>
                     </label>
-                    <span className="control-value">{baseModifier.toFixed(2)}</span>
+                    <EditableValue
+                        value={baseModifier}
+                        min={0}
+                        max={1}
+                        decimals={2}
+                        ariaLabel="Base chroma floor"
+                        onChange={onBaseModifierChange}
+                    />
                 </div>
                 <input
                     type="range"

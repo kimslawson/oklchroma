@@ -1,6 +1,7 @@
 import type { Pattern, ColorSpace } from "../types.ts";
 import { colorSpaceGroups } from "../utils/constants.ts";
 import ColorControls from "./color-controls.tsx";
+import EditableValue from "./editable-value.tsx";
 import ModifierCurveEditor from "./modifier-curve-editor.tsx";
 
 interface PatternEditorProps {
@@ -117,10 +118,17 @@ export default function PatternEditor({
                         <label className="input-label">
                             Hue Shift <span className="input-label-note">across scale</span>
                         </label>
-                        <span className="control-value is-accent">
-                            {pattern.hueShift > 0 ? "+" : ""}
-                            {pattern.hueShift.toFixed(0)}&deg;
-                        </span>
+                        <EditableValue
+                            value={pattern.hueShift}
+                            min={-90}
+                            max={90}
+                            decimals={0}
+                            unit="°"
+                            accent
+                            disabled={!supportsHueControls}
+                            ariaLabel="Hue shift in degrees"
+                            onChange={(next) => onUpdatePattern(pattern.id, "hueShift", next)}
+                        />
                     </div>
                     <input
                         type="range"

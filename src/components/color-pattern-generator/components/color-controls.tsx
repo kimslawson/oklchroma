@@ -1,6 +1,7 @@
 import { getSliderClassName, getRGBSliderVars } from "@components/color-pattern-generator/utils/color";
 import type { Pattern } from "../types.ts";
 import { colorSpaceComponents } from "../utils/constants.ts";
+import EditableValue from "./editable-value.tsx";
 
 interface ColorControlsProps {
     pattern: Pattern;
@@ -16,6 +17,7 @@ export default function ColorControls({ pattern, onColorValueChange }: ColorCont
                     const value = pattern.colorValues[component];
                     const sliderClassName = getSliderClassName(component, pattern.colorSpace);
                     const sliderVars = getRGBSliderVars(component, pattern);
+                    const decimals = range.step >= 1 ? 0 : range.step >= 0.1 ? 1 : range.step >= 0.01 ? 2 : 3;
 
                     return (
                         <div key={component} className="color-parameter">
@@ -23,10 +25,15 @@ export default function ColorControls({ pattern, onColorValueChange }: ColorCont
                                 <label className="slider-label" title={range.label || component.toUpperCase()}>
                                     {component.toUpperCase()}
                                 </label>
-                                <span className="control-value">
-                                    {value.toFixed(range.step < 0.1 ? 3 : 1)}
-                                    {range.unit || ""}
-                                </span>
+                                <EditableValue
+                                    value={value}
+                                    min={range.min}
+                                    max={range.max}
+                                    decimals={decimals}
+                                    unit={range.unit}
+                                    ariaLabel={`${range.label || component.toUpperCase()} value`}
+                                    onChange={(next) => onColorValueChange(pattern.id, component, next)}
+                                />
                             </div>
                             <input
                                 type="range"

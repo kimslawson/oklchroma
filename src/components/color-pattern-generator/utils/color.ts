@@ -34,6 +34,15 @@ export function sanitizePatternName(name: string): string {
     return name.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
 
+// Format a numeric component without destroying hand-entered precision:
+// shows minDecimals when that loses nothing, otherwise keeps the extra
+// digits (capped at maxDecimals to swallow float noise).
+export function formatComponentValue(value: number, minDecimals: number, maxDecimals = 6): string {
+    const rounded = Number(value.toFixed(maxDecimals));
+    const fixed = rounded.toFixed(minDecimals);
+    return Number(fixed) === rounded ? fixed : String(rounded);
+}
+
 function clamp01(value: number): number {
     return Math.max(0, Math.min(1, value));
 }
@@ -251,33 +260,35 @@ export function autoFitPatternToGamut(pattern: Pattern, target: GamutTarget): Pa
 // Helper function to format color values based on color space
 export function formatColor(colorSpace: ColorSpace, values: Record<string, number>): string {
     const components = colorSpaceComponents[colorSpace].components;
+    const value = (index: number, minDecimals: number): string =>
+        formatComponentValue(values[components[index]], minDecimals);
 
     // Format values based on color space
     switch (colorSpace) {
         case "oklab":
-            return `oklab(${values[components[0]].toFixed(2)} ${values[components[1]].toFixed(3)} ${values[components[2]].toFixed(3)})`;
+            return `oklab(${value(0, 2)} ${value(1, 3)} ${value(2, 3)})`;
         case "lch":
-            return `lch(${values[components[0]].toFixed(1)}% ${values[components[1]].toFixed(1)} ${values[components[2]].toFixed(0)})`;
+            return `lch(${value(0, 1)}% ${value(1, 1)} ${value(2, 0)})`;
         case "oklch":
-            return `oklch(${values[components[0]].toFixed(1)}% ${values[components[1]].toFixed(3)} ${values[components[2]].toFixed(0)})`;
+            return `oklch(${value(0, 1)}% ${value(1, 3)} ${value(2, 0)})`;
         case "hsl":
-            return `hsl(${values[components[0]].toFixed(0)}deg ${values[components[1]].toFixed(1)}% ${values[components[2]].toFixed(1)}%)`;
+            return `hsl(${value(0, 0)}deg ${value(1, 1)}% ${value(2, 1)}%)`;
         case "hwb":
-            return `hwb(${values[components[0]].toFixed(0)}deg ${values[components[1]].toFixed(1)}% ${values[components[2]].toFixed(1)}%)`;
+            return `hwb(${value(0, 0)}deg ${value(1, 1)}% ${value(2, 1)}%)`;
         case "lab":
-            return `lab(${values[components[0]].toFixed(1)}% ${values[components[1]].toFixed(1)} ${values[components[2]].toFixed(1)})`;
+            return `lab(${value(0, 1)}% ${value(1, 1)} ${value(2, 1)})`;
         case "srgb":
-            return `rgb(${Math.round(values[components[0]])}, ${Math.round(values[components[1]])}, ${Math.round(values[components[2]])})`;
+            return `rgb(${value(0, 0)}, ${value(1, 0)}, ${value(2, 0)})`;
         case "xyz":
-            return `color(xyz ${values[components[0]].toFixed(3)} ${values[components[1]].toFixed(3)} ${values[components[2]].toFixed(3)})`;
+            return `color(xyz ${value(0, 3)} ${value(1, 3)} ${value(2, 3)})`;
         case "display-p3":
-            return `color(display-p3 ${values[components[0]].toFixed(3)} ${values[components[1]].toFixed(3)} ${values[components[2]].toFixed(3)})`;
+            return `color(display-p3 ${value(0, 3)} ${value(1, 3)} ${value(2, 3)})`;
         case "a98-rgb":
-            return `color(a98-rgb ${values[components[0]].toFixed(3)} ${values[components[1]].toFixed(3)} ${values[components[2]].toFixed(3)})`;
+            return `color(a98-rgb ${value(0, 3)} ${value(1, 3)} ${value(2, 3)})`;
         case "prophoto-rgb":
-            return `color(prophoto-rgb ${values[components[0]].toFixed(3)} ${values[components[1]].toFixed(3)} ${values[components[2]].toFixed(3)})`;
+            return `color(prophoto-rgb ${value(0, 3)} ${value(1, 3)} ${value(2, 3)})`;
         case "rec2020":
-            return `color(rec2020 ${values[components[0]].toFixed(3)} ${values[components[1]].toFixed(3)} ${values[components[2]].toFixed(3)})`;
+            return `color(rec2020 ${value(0, 3)} ${value(1, 3)} ${value(2, 3)})`;
         default:
             return "";
     }
