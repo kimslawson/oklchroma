@@ -1,4 +1,4 @@
-import type { Pattern, ColorSpace } from "../types.ts";
+import type { Pattern, ColorSpace, GamutFit } from "../types.ts";
 import { colorSpaceGroups } from "../utils/constants.ts";
 import ColorControls from "./color-controls.tsx";
 import EditableValue from "./editable-value.tsx";
@@ -14,7 +14,6 @@ interface PatternEditorProps {
     nameError: string;
     patterns: Pattern[];
     onAddHarmonyPattern: (id: number, harmony: "complementary" | "analogous" | "split" | "triadic") => void;
-    onFitGamut: (id: number, target: "srgb" | "p3") => void;
     outputColorSpace: ColorSpace;
     onOutputColorSpaceChange: (space: ColorSpace) => void;
 }
@@ -29,7 +28,6 @@ export default function PatternEditor({
     nameError,
     patterns,
     onAddHarmonyPattern,
-    onFitGamut,
     outputColorSpace,
     onOutputColorSpaceChange,
 }: PatternEditorProps) {
@@ -197,34 +195,36 @@ export default function PatternEditor({
             {/* Gamut Controls */}
             <div className="editor-card gamut-tools">
                 <h2 className="subtitle">Gamut Adjustment</h2>
-                <p className="input-help">Automatically optimize palette values to fit within standard display gamuts.</p>
-                <div className="harmony-buttons">
-                    <button
-                        type="button"
-                        className="harmony-button"
-                        onClick={() => onFitGamut(pattern.id, "srgb")}
-                        title="Reduce chroma and base modifier to fit fully within the sRGB gamut"
-                    >
-                        <span
-                            className="harmony-preview-dot"
-                            style={{ backgroundColor: "#f59e0b" }}
-                            aria-hidden="true"
-                        />
-                        <span>Fit to sRGB</span>
-                    </button>
-                    <button
-                        type="button"
-                        className="harmony-button"
-                        onClick={() => onFitGamut(pattern.id, "p3")}
-                        title="Reduce chroma and base modifier to fit fully within the Display P3 gamut"
-                    >
-                        <span
-                            className="harmony-preview-dot"
-                            style={{ backgroundColor: "#ef4444" }}
-                            aria-hidden="true"
-                        />
-                        <span>Fit to Display P3</span>
-                    </button>
+                <p className="input-help">
+                    Non-destructively fit the palette within a standard display gamut. Source values are
+                    preserved &mdash; switch back anytime.
+                </p>
+                <div className="segmented" role="group" aria-label="Gamut fit">
+                    {(
+                        [
+                            { id: "none", label: "Original gamut", title: "Use the source values as-is" },
+                            {
+                                id: "srgb",
+                                label: "sRGB",
+                                title: "Reduce chroma and base modifier to fit fully within the sRGB gamut",
+                            },
+                            {
+                                id: "p3",
+                                label: "Display P3",
+                                title: "Reduce chroma and base modifier to fit fully within the Display P3 gamut",
+                            },
+                        ] as Array<{ id: GamutFit; label: string; title: string }>
+                    ).map((option) => (
+                        <button
+                            key={option.id}
+                            type="button"
+                            className={`segmented-button ${pattern.gamutFit === option.id ? "is-active" : ""}`}
+                            onClick={() => onUpdatePattern(pattern.id, "gamutFit", option.id)}
+                            title={option.title}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 

@@ -13,12 +13,12 @@ import {
     getCurveMultiplier,
     getPatternLightnessAnchor,
     getPatternColorAsOklch,
-    autoFitPatternToGamut,
+    applyGamutFit,
     SHADE_STEPS,
     sanitizePatternName,
 } from "@components/color-pattern-generator/utils/color";
 import { encodePatterns, loadPatternsFromURL } from "@components/color-pattern-generator/utils/url";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { Pattern, ColorSpace } from "./types";
 
 export default function ColorPatternGenerator(): React.ReactElement {
@@ -31,6 +31,7 @@ export default function ColorPatternGenerator(): React.ReactElement {
             baseModifier: 0.015,
             modifierCurve: DEFAULT_MODIFIER_CURVE,
             hueShift: 20,
+            gamutFit: "none",
         },
     ]);
     const [activeTab, setActiveTab] = useState<number>(1);
@@ -45,6 +46,11 @@ export default function ColorPatternGenerator(): React.ReactElement {
     // Ref for debouncing URL updates
     const urlUpdateTimeoutRef = useRef<number | null>(null);
 
+    // Patterns with their non-destructive gamut fit applied. Everything that
+    // renders or outputs colors reads these; the editor and the URL keep the
+    // untouched source patterns.
+    const effectivePatterns = useMemo(() => patterns.map((pattern) => applyGamutFit(pattern)), [patterns]);
+
     // Safe initialization
     useEffect(() => {
         // Load patterns from URL
@@ -55,6 +61,7 @@ export default function ColorPatternGenerator(): React.ReactElement {
                       ...pattern,
                       modifierCurve: pattern.modifierCurve ?? DEFAULT_MODIFIER_CURVE,
                       hueShift: pattern.hueShift ?? 0,
+                      gamutFit: pattern.gamutFit ?? "none",
                   }))
                 : null;
 
@@ -126,6 +133,7 @@ export default function ColorPatternGenerator(): React.ReactElement {
                 baseModifier: 0.015,
                 modifierCurve: DEFAULT_MODIFIER_CURVE,
                 hueShift: 20,
+                gamutFit: "none" as const,
             },
         ];
 
@@ -220,7 +228,7 @@ export default function ColorPatternGenerator(): React.ReactElement {
         let css = `:root {\n`;
         const cssVars: Record<string, string> = {};
 
-        patterns.forEach((pattern) => {
+        effectivePatterns.forEach((pattern) => {
             const { name, colorSpace, colorValues, baseModifier, hueShift } = pattern;
             const color = formatColor(colorSpace, colorValues);
 
@@ -257,16 +265,19 @@ export default function ColorPatternGenerator(): React.ReactElement {
                 ? `oklch(${formatComponentValue(baseOklchColor.l * 100, 1, 2)}% ${formatComponentValue(baseOklchColor.c, 3, 4)} ${formatComponentValue(baseOklchColor.h, 0, 2)})`
                 : color;
 
+            const baseModifierStr = formatComponentValue(baseModifier, 2);
+            const hueShiftStr = formatComponentValue(hueShift, 0);
+
             css += `  --${name}: ${color};\n`;
             css += `  --${name}-oklch: ${baseOklchStr};\n`;
-            css += `  --${name}-base: ${baseModifier};\n`;
-            css += `  --${name}-hue-shift: ${hueShift};\n`;
+            css += `  --${name}-base: ${baseModifierStr};\n`;
+            css += `  --${name}-hue-shift: ${hueShiftStr};\n`;
             css += `  --${name}-lightness-anchor: ${lightnessAnchorPercent}%;\n`;
 
             cssVars[`--${name}`] = color;
             cssVars[`--${name}-oklch`] = baseOklchStr;
-            cssVars[`--${name}-base`] = baseModifier.toString();
-            cssVars[`--${name}-hue-shift`] = hueShift.toString();
+            cssVars[`--${name}-base`] = baseModifierStr;
+            cssVars[`--${name}-hue-shift`] = hueShiftStr;
             cssVars[`--${name}-lightness-anchor`] = `${lightnessAnchorPercent}%`;
 
             SHADE_STEPS.forEach((i) => {
@@ -306,17 +317,6 @@ export default function ColorPatternGenerator(): React.ReactElement {
     const copyUrl = (): string => {
         // Make sure URL is updated before copying
         return updateURLParam();
-    };
-
-    const fitPatternToGamut = (id: number, target: "srgb" | "p3"): void => {
-        const nextPatterns = patterns.map((p) => {
-            if (p.id === id) {
-                return autoFitPatternToGamut(p, target);
-            }
-            return p;
-        });
-        setPatterns(nextPatterns);
-        debouncedUpdateURL(nextPatterns);
     };
 
     const addHarmonyPattern = (id: number, harmony: "complementary" | "analogous" | "split" | "triadic"): void => {
@@ -363,9 +363,11 @@ export default function ColorPatternGenerator(): React.ReactElement {
         updateURLParam(nextPatterns);
     };
 
-    // Function to get color for display based on the pattern's color space
+    // Function to get color for display based on the pattern's color space,
+    // with the pattern's gamut fit applied
     const getDisplayColor = (pattern: Pattern): string => {
-        return formatColor(pattern.colorSpace, pattern.colorValues);
+        const effective = effectivePatterns.find((p) => p.id === pattern.id) ?? pattern;
+        return formatColor(effective.colorSpace, effective.colorValues);
     };
 
     // Function to get a preview color for a specific shade
@@ -375,6 +377,8 @@ export default function ColorPatternGenerator(): React.ReactElement {
     };
 
     const activePattern = patterns.find((pattern) => pattern.id === activeTab) ?? patterns[0];
+    // Ramp preview, swatch names, and gamut warnings reflect the fitted output
+    const effectiveActivePattern = effectivePatterns.find((pattern) => pattern.id === activePattern?.id) ?? activePattern;
 
     return (
         <div className="container app-content" style={cssVariables as React.CSSProperties}>
@@ -414,10 +418,10 @@ export default function ColorPatternGenerator(): React.ReactElement {
                 )}
             </div>
 
-            {activePattern && (
+            {effectiveActivePattern && (
                 <ColorRamp
-                    pattern={activePattern}
-                    displayColor={getDisplayColor(activePattern)}
+                    pattern={effectiveActivePattern}
+                    displayColor={getDisplayColor(effectiveActivePattern)}
                     getPreviewVarName={getPreviewVarName}
                     cssVariables={cssVariables}
                 />
@@ -438,7 +442,6 @@ export default function ColorPatternGenerator(): React.ReactElement {
                             nameError={nameError}
                             patterns={patterns}
                             onAddHarmonyPattern={addHarmonyPattern}
-                            onFitGamut={fitPatternToGamut}
                             outputColorSpace={outputColorSpace}
                             onOutputColorSpaceChange={setOutputColorSpace}
                         />

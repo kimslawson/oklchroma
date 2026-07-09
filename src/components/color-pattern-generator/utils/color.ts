@@ -233,6 +233,16 @@ function isInTargetGamut(pattern: Pattern, target: GamutTarget): boolean {
     return analysis.every((entry) => (target === "p3" ? !entry.outOfP3 : !entry.outOfSrgb));
 }
 
+// Resolve a pattern's non-destructive gamut fit: returns the pattern itself
+// when no fit is active, otherwise a derived copy squeezed into the target
+// gamut. The stored source values are never modified.
+export function applyGamutFit(pattern: Pattern): Pattern {
+    if (pattern.gamutFit !== "srgb" && pattern.gamutFit !== "p3") {
+        return pattern;
+    }
+    return autoFitPatternToGamut(pattern, pattern.gamutFit);
+}
+
 export function autoFitPatternToGamut(pattern: Pattern, target: GamutTarget): Pattern {
     if (isInTargetGamut(pattern, target)) {
         return pattern;

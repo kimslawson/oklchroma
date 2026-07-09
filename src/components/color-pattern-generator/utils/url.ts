@@ -1,4 +1,4 @@
-import type { Pattern, ColorSpace } from "../types.ts";
+import type { Pattern, ColorSpace, GamutFit } from "../types.ts";
 import { DEFAULT_MODIFIER_CURVE, getDefaultColorValues, handleColorSpaceChange } from "./color.ts";
 import { colorSpaceToCode, codeToColorSpace, colorSpaceComponents } from "./constants.ts";
 
@@ -26,8 +26,12 @@ export function encodePatterns(patterns: Pattern[]): string {
         const curve = pattern.modifierCurve.map((point) => point.toFixed(3).replace(/\.?0+$/, "")).join(",");
         const hueShift = pattern.hueShift.toFixed(2).replace(/\.?0+$/, "");
 
+        // Gamut fit is an optional trailing segment so unfitted patterns
+        // encode exactly as before
+        const fitCode = pattern.gamutFit === "srgb" ? "s" : pattern.gamutFit === "p3" ? "p" : "";
+
         // Combine all parts with a separator
-        parts.push(`${name}:${spaceCode}:${values}:${base}:${curve}:${hueShift}`);
+        parts.push(`${name}:${spaceCode}:${values}:${base}:${curve}:${hueShift}${fitCode ? `:${fitCode}` : ""}`);
     });
 
     return parts.join("|");
@@ -42,7 +46,7 @@ export function decodePatterns(encoded: string): Pattern[] {
 
     parts.forEach((part, index) => {
         try {
-            const [name, spaceCode, valuesStr, baseStr, curveStr, hueShiftStr] = part.split(":");
+            const [name, spaceCode, valuesStr, baseStr, curveStr, hueShiftStr, fitStr] = part.split(":");
 
             // Get color space from code
             const colorSpace = codeToColorSpace[spaceCode] || "oklch";
@@ -70,6 +74,7 @@ export function decodePatterns(encoded: string): Pattern[] {
                 ? (curveStr.split(",").map((value) => parseFloat(value)) as [number, number, number, number])
                 : DEFAULT_MODIFIER_CURVE;
             const hueShift = hueShiftStr ? parseFloat(hueShiftStr) : 0;
+            const gamutFit: GamutFit = fitStr === "s" ? "srgb" : fitStr === "p" ? "p3" : "none";
 
             // Add pattern
             patterns.push({
@@ -83,6 +88,7 @@ export function decodePatterns(encoded: string): Pattern[] {
                         ? modifierCurve
                         : DEFAULT_MODIFIER_CURVE,
                 hueShift: Number.isNaN(hueShift) ? 0 : hueShift,
+                gamutFit,
             });
         } catch (e) {
             console.error("Failed to parse pattern:", part, e);
@@ -99,6 +105,7 @@ export function decodePatterns(encoded: string): Pattern[] {
             baseModifier: 0.05,
             modifierCurve: DEFAULT_MODIFIER_CURVE,
             hueShift: 0,
+            gamutFit: "none",
         });
     }
 
@@ -137,6 +144,7 @@ export function loadPatternsFromURL(): Pattern[] {
                         baseModifier: p.baseModifier ?? 0.05,
                         modifierCurve: p.modifierCurve ?? DEFAULT_MODIFIER_CURVE,
                         hueShift: p.hueShift ?? 0,
+                        gamutFit: p.gamutFit ?? "none",
                     };
                 }
 
@@ -168,6 +176,7 @@ export function loadPatternsFromURL(): Pattern[] {
                     baseModifier: p.baseModifier ?? 0.05,
                     modifierCurve: p.modifierCurve ?? DEFAULT_MODIFIER_CURVE,
                     hueShift: p.hueShift ?? 0,
+                    gamutFit: p.gamutFit ?? "none",
                 };
             });
         } catch (e) {
@@ -189,6 +198,7 @@ function getDefaultPatterns(): Pattern[] {
             baseModifier: 0.05,
             modifierCurve: DEFAULT_MODIFIER_CURVE,
             hueShift: 0,
+            gamutFit: "none",
         },
     ];
 }

@@ -35,6 +35,9 @@ export interface ColorComponents {
     [key: string]: ColorSpaceDefinition;
 }
 
+// Non-destructive gamut fit applied to a pattern's output
+export type GamutFit = "none" | "srgb" | "p3";
+
 // Define pattern types
 export interface Pattern {
     id: number;
@@ -44,4 +47,5 @@ export interface Pattern {
     baseModifier: number;
     modifierCurve: [number, number, number, number];
     hueShift: number;
+    gamutFit: GamutFit;
 }
