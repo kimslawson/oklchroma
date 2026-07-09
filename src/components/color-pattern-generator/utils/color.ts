@@ -1,4 +1,4 @@
-import { converter, inGamut } from "culori";
+import { converter, formatHex, inGamut, toGamut } from "culori";
 import type { ColorSpace, Pattern } from "../types.ts";
 import { colorSpaceComponents } from "./constants.ts";
 
@@ -41,6 +41,16 @@ export function formatComponentValue(value: number, minDecimals: number, maxDeci
     const rounded = Number(value.toFixed(maxDecimals));
     const fixed = rounded.toFixed(minDecimals);
     return Number(fixed) === rounded ? fixed : String(rounded);
+}
+
+// Two-digit hex channel helpers for the hex color space's value fields
+export function formatHexPair(value: number): string {
+    return Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0");
+}
+
+export function parseHexPair(text: string): number {
+    const trimmed = text.trim().replace(/^#/, "");
+    return /^[0-9a-f]{1,2}$/i.test(trimmed) ? parseInt(trimmed, 16) : NaN;
 }
 
 function clamp01(value: number): number {
@@ -121,6 +131,7 @@ export function getPatternColorAsOklch(pattern: Pattern): OklchColor | null {
         hwb: { mode: "hwb", h: colorValues.h, w: colorValues.w / 100, b: colorValues.b / 100 },
         lab: { mode: "lab", l: colorValues.l, a: colorValues.a, b: colorValues.b },
         srgb: { mode: "rgb", r: colorValues.r / 255, g: colorValues.g / 255, b: colorValues.b / 255 },
+        hex: { mode: "rgb", r: colorValues.r / 255, g: colorValues.g / 255, b: colorValues.b / 255 },
         xyz: { mode: "xyz65", x: colorValues.x, y: colorValues.y, z: colorValues.z },
         "display-p3": { mode: "p3", r: colorValues.r, g: colorValues.g, b: colorValues.b },
         "a98-rgb": { mode: "a98", r: colorValues.r, g: colorValues.g, b: colorValues.b },
@@ -129,11 +140,13 @@ export function getPatternColorAsOklch(pattern: Pattern): OklchColor | null {
     };
 
     const converted = toOklch(colorBySpace[colorSpace] as any) as OklchColor | undefined;
-    if (!converted || converted.l === undefined || converted.c === undefined || converted.h === undefined) {
+    if (!converted || converted.l === undefined || converted.c === undefined) {
         return null;
     }
 
-    return { mode: "oklch", l: converted.l, c: converted.c, h: converted.h };
+    // Achromatic colors come back without a hue; default it to 0 so the
+    // generated CSS never has to deal with a `none` hue channel
+    return { mode: "oklch", l: converted.l, c: converted.c, h: converted.h ?? 0 };
 }
 
 export function getPatternLightnessAnchor(pattern: Pattern): number {
@@ -279,6 +292,8 @@ export function formatColor(colorSpace: ColorSpace, values: Record<string, numbe
             return `lab(${value(0, 1)}% ${value(1, 1)} ${value(2, 1)})`;
         case "srgb":
             return `rgb(${value(0, 0)}, ${value(1, 0)}, ${value(2, 0)})`;
+        case "hex":
+            return formatHex({ mode: "rgb", r: values.r / 255, g: values.g / 255, b: values.b / 255 });
         case "xyz":
             return `color(xyz ${value(0, 3)} ${value(1, 3)} ${value(2, 3)})`;
         case "display-p3":
@@ -289,6 +304,79 @@ export function formatColor(colorSpace: ColorSpace, values: Record<string, numbe
             return `color(prophoto-rgb ${value(0, 3)} ${value(1, 3)} ${value(2, 3)})`;
         case "rec2020":
             return `color(rec2020 ${value(0, 3)} ${value(1, 3)} ${value(2, 3)})`;
+        default:
+            return "";
+    }
+}
+
+// culori converter modes for each app color space
+const culoriModeBySpace: Record<ColorSpace, string> = {
+    oklab: "oklab",
+    lch: "lch",
+    oklch: "oklch",
+    hsl: "hsl",
+    hwb: "hwb",
+    lab: "lab",
+    srgb: "rgb",
+    hex: "rgb",
+    xyz: "xyz65",
+    "display-p3": "p3",
+    "a98-rgb": "a98",
+    "prophoto-rgb": "prophoto",
+    rec2020: "rec2020",
+};
+
+// Gamut-bounded target spaces get CSS-style gamut mapping (chroma reduction)
+// so out-of-gamut shades degrade gracefully instead of clipping per channel
+const gamutMapperBySpace: Partial<Record<ColorSpace, (color: OklchColor) => any>> = {
+    srgb: toGamut("rgb", "oklch"),
+    hex: toGamut("rgb", "oklch"),
+    hsl: toGamut("rgb", "oklch"),
+    hwb: toGamut("rgb", "oklch"),
+    "display-p3": toGamut("p3", "oklch"),
+    "a98-rgb": toGamut("a98", "oklch"),
+    "prophoto-rgb": toGamut("prophoto", "oklch"),
+    rec2020: toGamut("rec2020", "oklch"),
+};
+
+// Convert a computed OKLCH color into a CSS string in the requested space.
+// Bounded targets (hex, sRGB, P3, ...) are gamut-mapped first so every
+// emitted value is representable in that space.
+export function formatOklchForSpace(color: OklchColor, target: ColorSpace): string {
+    if (target === "oklch") {
+        return `oklch(${formatComponentValue(color.l * 100, 1, 2)}% ${formatComponentValue(color.c, 3, 4)} ${formatComponentValue(color.h, 0, 2)})`;
+    }
+
+    // Gamut-map first (returns the gamut's rgb-ish mode), then convert to the
+    // target's own mode — hsl/hwb are sRGB-gamut spaces but not rgb-mode objects
+    const mapper = gamutMapperBySpace[target];
+    const mapped = mapper ? mapper(color) : color;
+    const converted: any = converter(culoriModeBySpace[target] as any)(mapped);
+    const n = (value: number | undefined, minDecimals: number, maxDecimals: number): string =>
+        formatComponentValue(value ?? 0, minDecimals, maxDecimals);
+
+    switch (target) {
+        case "oklab":
+            return `oklab(${n(converted.l, 2, 3)} ${n(converted.a, 3, 4)} ${n(converted.b, 3, 4)})`;
+        case "lch":
+            return `lch(${n(converted.l, 1, 2)}% ${n(converted.c, 1, 2)} ${n(converted.h, 0, 1)})`;
+        case "hsl":
+            return `hsl(${n(converted.h, 0, 1)}deg ${n((converted.s ?? 0) * 100, 1, 2)}% ${n((converted.l ?? 0) * 100, 1, 2)}%)`;
+        case "hwb":
+            return `hwb(${n(converted.h, 0, 1)}deg ${n((converted.w ?? 0) * 100, 1, 2)}% ${n((converted.b ?? 0) * 100, 1, 2)}%)`;
+        case "lab":
+            return `lab(${n(converted.l, 1, 2)}% ${n(converted.a, 1, 2)} ${n(converted.b, 1, 2)})`;
+        case "srgb":
+            return `rgb(${n((converted.r ?? 0) * 255, 0, 1)}, ${n((converted.g ?? 0) * 255, 0, 1)}, ${n((converted.b ?? 0) * 255, 0, 1)})`;
+        case "hex":
+            return formatHex(converted) ?? "#000000";
+        case "xyz":
+            return `color(xyz ${n(converted.x, 3, 4)} ${n(converted.y, 3, 4)} ${n(converted.z, 3, 4)})`;
+        case "display-p3":
+        case "a98-rgb":
+        case "prophoto-rgb":
+        case "rec2020":
+            return `color(${target} ${n(converted.r, 3, 4)} ${n(converted.g, 3, 4)} ${n(converted.b, 3, 4)})`;
         default:
             return "";
     }
@@ -357,11 +445,11 @@ export function getSliderClassName(component: string, colorSpace: ColorSpace): s
     // Add special classes for specific components across color spaces
     if (component === "h") {
         className += " hue-slider";
-    } else if (component === "r" && ["srgb", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"].includes(colorSpace)) {
+    } else if (component === "r" && ["srgb", "hex", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"].includes(colorSpace)) {
         className += " red-slider";
-    } else if (component === "g" && ["srgb", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"].includes(colorSpace)) {
+    } else if (component === "g" && ["srgb", "hex", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"].includes(colorSpace)) {
         className += " green-slider";
-    } else if (component === "b" && ["srgb", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"].includes(colorSpace)) {
+    } else if (component === "b" && ["srgb", "hex", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"].includes(colorSpace)) {
         className += " blue-slider";
     } else if (component === "w" && colorSpace === "hwb") {
         className += " whiteness-slider";
@@ -378,7 +466,7 @@ export function getSliderClassName(component: string, colorSpace: ColorSpace): s
 
 // Function to get CSS variables for RGB-based sliders
 export function getRGBSliderVars(component: string, pattern: any): Record<string, string> {
-    if (!["srgb", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"].includes(pattern.colorSpace)) {
+    if (!["srgb", "hex", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"].includes(pattern.colorSpace)) {
         return {};
     }
 
@@ -391,9 +479,10 @@ export function getRGBSliderVars(component: string, pattern: any): Record<string
     const value1 = values[otherComponents[0]];
     const value2 = values[otherComponents[1]];
 
-    // Normalize values for non-sRGB color spaces
-    const v1 = colorSpace === "srgb" ? Math.round(value1) : value1.toFixed(3);
-    const v2 = colorSpace === "srgb" ? Math.round(value2) : value2.toFixed(3);
+    // Normalize values for non-sRGB color spaces (srgb and hex use 0-255 channels)
+    const uses255 = colorSpace === "srgb" || colorSpace === "hex";
+    const v1 = uses255 ? Math.round(value1) : value1.toFixed(3);
+    const v2 = uses255 ? Math.round(value2) : value2.toFixed(3);
 
     if (component === "r") {
         return {

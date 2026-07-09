@@ -4,7 +4,7 @@ import type { ColorComponents, ColorSpace } from "../types.ts";
 export const colorSpaceGroups = {
     Default: ["oklab"],
     Cylindrical: ["lch", "oklch", "hsl", "hwb"],
-    Cartesian: ["lab", "srgb", "xyz", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"],
+    Cartesian: ["lab", "srgb", "hex", "xyz", "display-p3", "a98-rgb", "prophoto-rgb", "rec2020"],
 };
 
 // Define color components for each color space
@@ -65,6 +65,16 @@ export const colorSpaceComponents: ColorComponents = {
             b: { min: 0, max: 255, step: 1, label: "Blue" },
         },
     },
+    // sRGB expressed in hex notation: same sliders as srgb, but the value
+    // fields show/accept two-digit hex pairs and the color formats as #rrggbb
+    hex: {
+        components: ["r", "g", "b"],
+        ranges: {
+            r: { min: 0, max: 255, step: 1, label: "Red" },
+            g: { min: 0, max: 255, step: 1, label: "Green" },
+            b: { min: 0, max: 255, step: 1, label: "Blue" },
+        },
+    },
     xyz: {
         components: ["x", "y", "z"],
         ranges: {
@@ -116,6 +126,7 @@ export const colorSpaceToCode: Record<ColorSpace, string> = {
     hwb: "hw",
     lab: "lb",
     srgb: "sr",
+    hex: "hx",
     xyz: "xy",
     "display-p3": "p3",
     "a98-rgb": "a9",

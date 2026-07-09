@@ -11,6 +11,11 @@ interface EditableValueProps {
     ariaLabel: string;
     accent?: boolean;
     disabled?: boolean;
+    // Override display/parsing for non-decimal notations (e.g. hex pairs).
+    // parse returns NaN for text that isn't a value yet.
+    format?: (value: number) => string;
+    parse?: (text: string) => number;
+    inputMode?: "decimal" | "text";
     onChange: (value: number) => void;
 }
 
@@ -30,17 +35,20 @@ export default function EditableValue({
     ariaLabel,
     accent = false,
     disabled = false,
+    format,
+    parse,
+    inputMode = "decimal",
     onChange,
 }: EditableValueProps) {
     // Raw text while the field is focused; null means "show the formatted value"
     const [draft, setDraft] = useState<string | null>(null);
     const valueOnFocus = useRef(value);
 
-    const display = draft ?? formatComponentValue(value, decimals);
+    const display = draft ?? (format ? format(value) : formatComponentValue(value, decimals));
 
     const handleChange = (text: string) => {
         setDraft(text);
-        const parsed = parseFloat(text.trim().replace(",", "."));
+        const parsed = parse ? parse(text) : parseFloat(text.trim().replace(",", "."));
         if (!Number.isNaN(parsed)) {
             onChange(clampValue(parsed, min, max));
         }
@@ -50,7 +58,7 @@ export default function EditableValue({
         <label className={`control-value control-value-field ${accent ? "is-accent" : ""}`}>
             <input
                 type="text"
-                inputMode="decimal"
+                inputMode={inputMode}
                 autoComplete="off"
                 spellCheck={false}
                 className="control-value-input"

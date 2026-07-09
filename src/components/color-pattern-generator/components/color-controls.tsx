@@ -1,4 +1,9 @@
-import { getSliderClassName, getRGBSliderVars } from "@components/color-pattern-generator/utils/color";
+import {
+    getSliderClassName,
+    getRGBSliderVars,
+    formatHexPair,
+    parseHexPair,
+} from "@components/color-pattern-generator/utils/color";
 import type { Pattern } from "../types.ts";
 import { colorSpaceComponents } from "../utils/constants.ts";
 import EditableValue from "./editable-value.tsx";
@@ -9,6 +14,9 @@ interface ColorControlsProps {
 }
 
 export default function ColorControls({ pattern, onColorValueChange }: ColorControlsProps) {
+    // Hex fields show/accept two-digit hex pairs instead of decimal numbers
+    const isHexSpace = pattern.colorSpace === "hex";
+
     return (
         <div className="color-space-controls">
             <div className="color-parameters">
@@ -32,6 +40,9 @@ export default function ColorControls({ pattern, onColorValueChange }: ColorCont
                                     decimals={decimals}
                                     unit={range.unit}
                                     ariaLabel={`${range.label || component.toUpperCase()} value`}
+                                    format={isHexSpace ? formatHexPair : undefined}
+                                    parse={isHexSpace ? parseHexPair : undefined}
+                                    inputMode={isHexSpace ? "text" : undefined}
                                     onChange={(next) => onColorValueChange(pattern.id, component, next)}
                                 />
                             </div>

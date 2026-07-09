@@ -8,6 +8,8 @@ import {
     getDefaultColorValues,
     formatColor,
     formatComponentValue,
+    formatOklchForSpace,
+    computeScaleOklch,
     getCurveMultiplier,
     getPatternLightnessAnchor,
     getPatternColorAsOklch,
@@ -32,6 +34,9 @@ export default function ColorPatternGenerator(): React.ReactElement {
         },
     ]);
     const [activeTab, setActiveTab] = useState<number>(1);
+    // Color space the generated CSS is written in; oklch keeps the dynamic
+    // relative-color output, anything else emits converted fixed values
+    const [outputColorSpace, setOutputColorSpace] = useState<ColorSpace>("oklch");
     const [outputCSS, setOutputCSS] = useState<string>("");
     const [currentUrl, setCurrentUrl] = useState<string>("");
     const [nameError, setNameError] = useState<string>("");
@@ -70,7 +75,7 @@ export default function ColorPatternGenerator(): React.ReactElement {
             generateCSS();
             // Don't update URL here - as that became buggy, which is why a little timeout set below to create a debounce
         }
-    }, [patterns]);
+    }, [patterns, outputColorSpace]);
 
     // Debounced URL update function. Callers pass the patterns array they just
     // set, so the write never lags one edit behind the state (`patterns` from
@@ -218,6 +223,31 @@ export default function ColorPatternGenerator(): React.ReactElement {
         patterns.forEach((pattern) => {
             const { name, colorSpace, colorValues, baseModifier, hueShift } = pattern;
             const color = formatColor(colorSpace, colorValues);
+
+            // Non-oklch output: convert every color to the chosen space and emit
+            // fixed values, usable where oklch/relative color syntax isn't supported
+            if (outputColorSpace !== "oklch") {
+                const baseOklch = getPatternColorAsOklch(pattern);
+                const baseColor =
+                    colorSpace === outputColorSpace || !baseOklch
+                        ? color
+                        : formatOklchForSpace(baseOklch, outputColorSpace);
+
+                css += `  --${name}: ${baseColor};\n`;
+                cssVars[`--${name}`] = baseColor;
+
+                SHADE_STEPS.forEach((i) => {
+                    const shade = computeScaleOklch(pattern, i);
+                    const shadeColor = shade ? formatOklchForSpace(shade, outputColorSpace) : baseColor;
+                    const variableName = `--${name}-${i}`;
+
+                    css += `  ${variableName}: ${shadeColor};\n`;
+                    cssVars[variableName] = shadeColor;
+                });
+
+                css += "\n";
+                return;
+            }
             const lightnessAnchor = getPatternLightnessAnchor(pattern);
             const lightnessAnchorPercent = (lightnessAnchor * 100).toFixed(2);
 
@@ -409,6 +439,8 @@ export default function ColorPatternGenerator(): React.ReactElement {
                             patterns={patterns}
                             onAddHarmonyPattern={addHarmonyPattern}
                             onFitGamut={fitPatternToGamut}
+                            outputColorSpace={outputColorSpace}
+                            onOutputColorSpaceChange={setOutputColorSpace}
                         />
                     ))}
                 </div>
