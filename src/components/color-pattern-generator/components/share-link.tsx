@@ -36,7 +36,7 @@ export default function ShareLink({ url, onCopy }: ShareLinkProps) {
                 </span>
                 <span>{copied ? "Link copied!" : "Share palette link"}</span>
             </button>
-            <p className="share-description">URL encodes all patterns — share to restore.</p>
+            <p className="share-description">URL encodes all patterns and the output color space — share to restore.</p>
         </div>
     );
 }

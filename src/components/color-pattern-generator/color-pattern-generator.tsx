@@ -17,7 +17,12 @@ import {
     SHADE_STEPS,
     sanitizePatternName,
 } from "@components/color-pattern-generator/utils/color";
-import { encodePatterns, loadPatternsFromURL } from "@components/color-pattern-generator/utils/url";
+import {
+    encodePatterns,
+    loadPatternsFromURL,
+    loadOutputColorSpaceFromURL,
+} from "@components/color-pattern-generator/utils/url";
+import { colorSpaceToCode } from "@components/color-pattern-generator/utils/constants";
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { Pattern, ColorSpace } from "./types";
 
@@ -69,6 +74,12 @@ export default function ColorPatternGenerator(): React.ReactElement {
             setPatterns(normalizedPatterns);
         }
 
+        // Restore the CSS output color space from the share link
+        const loadedOutputSpace = loadOutputColorSpaceFromURL();
+        if (loadedOutputSpace !== "oklch") {
+            setOutputColorSpace(loadedOutputSpace);
+        }
+
         if (window.location.search.includes("p=")) {
             setCurrentUrl(window.location.href);
         }
@@ -84,21 +95,27 @@ export default function ColorPatternGenerator(): React.ReactElement {
         }
     }, [patterns, outputColorSpace]);
 
-    // Debounced URL update function. Callers pass the patterns array they just
-    // set, so the write never lags one edit behind the state (`patterns` from
+    // Debounced URL update function. Callers pass the state they just set, so
+    // the write never lags one edit behind (`patterns`/`outputColorSpace` from
     // this render's closure would not include the change that scheduled it).
-    const debouncedUpdateURL = (nextPatterns: Pattern[] = patterns): void => {
+    const debouncedUpdateURL = (
+        nextPatterns: Pattern[] = patterns,
+        nextOutputSpace: ColorSpace = outputColorSpace,
+    ): void => {
         if (urlUpdateTimeoutRef.current) {
             clearTimeout(urlUpdateTimeoutRef.current);
         }
 
         urlUpdateTimeoutRef.current = setTimeout(() => {
-            updateURLParam(nextPatterns);
+            updateURLParam(nextPatterns, nextOutputSpace);
         }, 1000); // 1 second debounce
     };
 
     // Update URL using query parameter instead of hash
-    const updateURLParam = (patternsToEncode: Pattern[] = patterns): string => {
+    const updateURLParam = (
+        patternsToEncode: Pattern[] = patterns,
+        outputSpaceToEncode: ColorSpace = outputColorSpace,
+    ): string => {
         if (typeof window === "undefined") return "";
 
         // Encode patterns to compact format
@@ -107,6 +124,14 @@ export default function ColorPatternGenerator(): React.ReactElement {
         // Create URL with query parameter
         const url = new URL(window.location.href);
         url.searchParams.set("p", encodedPatterns);
+
+        // Persist the CSS output color space; the oklch default stays out of
+        // the URL so unchanged links encode exactly as before
+        if (outputSpaceToEncode !== "oklch") {
+            url.searchParams.set("o", colorSpaceToCode[outputSpaceToEncode]);
+        } else {
+            url.searchParams.delete("o");
+        }
 
         const nextUrl = url.toString();
 
@@ -319,6 +344,11 @@ export default function ColorPatternGenerator(): React.ReactElement {
         return updateURLParam();
     };
 
+    const changeOutputColorSpace = (space: ColorSpace): void => {
+        setOutputColorSpace(space);
+        debouncedUpdateURL(patterns, space);
+    };
+
     const addHarmonyPattern = (id: number, harmony: "complementary" | "analogous" | "split" | "triadic"): void => {
         if (patterns.length >= 10) {
             return;
@@ -443,7 +473,7 @@ export default function ColorPatternGenerator(): React.ReactElement {
                             patterns={patterns}
                             onAddHarmonyPattern={addHarmonyPattern}
                             outputColorSpace={outputColorSpace}
-                            onOutputColorSpaceChange={setOutputColorSpace}
+                            onOutputColorSpaceChange={changeOutputColorSpace}
                         />
                     ))}
                 </div>

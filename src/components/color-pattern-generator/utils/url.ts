@@ -112,6 +112,16 @@ export function decodePatterns(encoded: string): Pattern[] {
     return patterns;
 }
 
+// Load the CSS output color space from the URL's "o" parameter
+export function loadOutputColorSpaceFromURL(): ColorSpace {
+    if (typeof window === "undefined") return "oklch";
+
+    const code = new URLSearchParams(window.location.search).get("o");
+    if (!code) return "oklch";
+
+    return codeToColorSpace[code] ?? "oklch";
+}
+
 // Load patterns from URL or hash
 export function loadPatternsFromURL(): Pattern[] {
     if (typeof window === "undefined") return getDefaultPatterns();
