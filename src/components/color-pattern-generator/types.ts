@@ -10,6 +10,7 @@ export type ColorSpace =
     // Cartesian
     | "lab"
     | "srgb"
+    | "hex"
     | "xyz"
     | "display-p3"
     | "a98-rgb"

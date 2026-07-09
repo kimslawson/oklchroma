@@ -87,6 +87,49 @@
 	white-space: nowrap;
 }
 
+.control-value-field {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.12rem;
+	cursor: text;
+}
+
+.control-value-input {
+	/* --value-ch is set inline to the current character count so the field hugs its value;
+	   each character advances 1ch plus the 0.02em letter-spacing */
+	inline-size: calc(var(--value-ch, 4) * (1ch + 0.02em) + 0.6rem + 2px);
+	padding: 0.08rem 0.3rem;
+	border: 1px solid color-mix(in oklab, var(--s-surface-border), transparent 35%);
+	border-radius: var(--s-radius-sm);
+	background-color: var(--input-bg);
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	text-align: right;
+	transition:
+		border-color var(--transition-fast, 0.2s) ease,
+		box-shadow var(--transition-fast, 0.2s) ease;
+}
+
+.control-value-input:hover:not(:disabled) {
+	border-color: var(--s-surface-border);
+}
+
+.control-value-input:focus {
+	outline: none;
+	border-color: var(--s-color-brand-primary);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--s-color-brand-primary), transparent 78%);
+}
+
+.control-value-input:disabled {
+	cursor: not-allowed;
+	opacity: 0.45;
+}
+
+.control-value-unit {
+	user-select: none;
+}
+
 .input-label-note {
 	color: var(--text-secondary);
 	font-weight: 400;

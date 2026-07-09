@@ -13,20 +13,18 @@ export function encodePatterns(patterns: Pattern[]): string {
         // Encode color space (use short code)
         const spaceCode = colorSpaceToCode[pattern.colorSpace] || "ok";
 
-        // Encode color values (rounded to 3 decimal places max)
+        // Encode color values (trailing zeros stripped, so extra decimals only
+        // lengthen the URL when hand-entered precision actually uses them)
         const components = colorSpaceComponents[pattern.colorSpace].components;
         const values = components
-            .map((c) =>
-                // Round to fewer decimal places for smaller URLs
-                pattern.colorValues[c].toFixed(3).replace(/\.?0+$/, ""),
-            )
+            .map((c) => pattern.colorValues[c].toFixed(5).replace(/\.?0+$/, ""))
             .join(",");
 
-        // Encode base modifier (rounded to 2 decimal places)
-        const base = pattern.baseModifier.toFixed(2).replace(/\.?0+$/, "");
+        // Encode base modifier
+        const base = pattern.baseModifier.toFixed(4).replace(/\.?0+$/, "");
 
         const curve = pattern.modifierCurve.map((point) => point.toFixed(3).replace(/\.?0+$/, "")).join(",");
-        const hueShift = pattern.hueShift.toFixed(1).replace(/\.?0+$/, "");
+        const hueShift = pattern.hueShift.toFixed(2).replace(/\.?0+$/, "");
 
         // Combine all parts with a separator
         parts.push(`${name}:${spaceCode}:${values}:${base}:${curve}:${hueShift}`);
@@ -65,8 +63,9 @@ export function decodePatterns(encoded: string): Pattern[] {
                 }
             });
 
-            // Parse base modifier
-            const baseModifier = parseFloat(baseStr) || 0.05;
+            // Parse base modifier (0 is a valid value, so only fall back on NaN)
+            const parsedBase = parseFloat(baseStr);
+            const baseModifier = Number.isNaN(parsedBase) ? 0.05 : parsedBase;
             const modifierCurve = curveStr
                 ? (curveStr.split(",").map((value) => parseFloat(value)) as [number, number, number, number])
                 : DEFAULT_MODIFIER_CURVE;

@@ -7,6 +7,9 @@ import {
     DEFAULT_MODIFIER_CURVE,
     getDefaultColorValues,
     formatColor,
+    formatComponentValue,
+    formatOklchForSpace,
+    computeScaleOklch,
     getCurveMultiplier,
     getPatternLightnessAnchor,
     getPatternColorAsOklch,
@@ -31,6 +34,9 @@ export default function ColorPatternGenerator(): React.ReactElement {
         },
     ]);
     const [activeTab, setActiveTab] = useState<number>(1);
+    // Color space the generated CSS is written in; oklch keeps the dynamic
+    // relative-color output, anything else emits converted fixed values
+    const [outputColorSpace, setOutputColorSpace] = useState<ColorSpace>("oklch");
     const [outputCSS, setOutputCSS] = useState<string>("");
     const [currentUrl, setCurrentUrl] = useState<string>("");
     const [nameError, setNameError] = useState<string>("");
@@ -69,16 +75,18 @@ export default function ColorPatternGenerator(): React.ReactElement {
             generateCSS();
             // Don't update URL here - as that became buggy, which is why a little timeout set below to create a debounce
         }
-    }, [patterns]);
+    }, [patterns, outputColorSpace]);
 
-    // Debounced URL update function
-    const debouncedUpdateURL = (): void => {
+    // Debounced URL update function. Callers pass the patterns array they just
+    // set, so the write never lags one edit behind the state (`patterns` from
+    // this render's closure would not include the change that scheduled it).
+    const debouncedUpdateURL = (nextPatterns: Pattern[] = patterns): void => {
         if (urlUpdateTimeoutRef.current) {
             clearTimeout(urlUpdateTimeoutRef.current);
         }
 
         urlUpdateTimeoutRef.current = setTimeout(() => {
-            updateURLParam(patterns);
+            updateURLParam(nextPatterns);
         }, 1000); // 1 second debounce
     };
 
@@ -167,45 +175,45 @@ export default function ColorPatternGenerator(): React.ReactElement {
             const newColorSpace = value as ColorSpace;
             const newColorValues = getDefaultColorValues(newColorSpace);
 
-            setPatterns(
-                patterns.map((p) =>
-                    p.id === id
-                        ? {
-                              ...p,
-                              colorSpace: newColorSpace,
-                              colorValues: newColorValues,
-                          }
-                        : p,
-                ),
+            const nextPatterns = patterns.map((p) =>
+                p.id === id
+                    ? {
+                          ...p,
+                          colorSpace: newColorSpace,
+                          colorValues: newColorValues,
+                      }
+                    : p,
             );
 
-            debouncedUpdateURL();
+            setPatterns(nextPatterns);
+            debouncedUpdateURL(nextPatterns);
             return;
         }
 
-        setPatterns(patterns.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+        const nextPatterns = patterns.map((p) => (p.id === id ? { ...p, [field]: value } : p));
+        setPatterns(nextPatterns);
 
-        debouncedUpdateURL();
+        debouncedUpdateURL(nextPatterns);
     };
 
     const updateColorValue = (id: number, component: string, value: number): void => {
-        setPatterns(
-            patterns.map((p) => {
-                if (p.id === id) {
-                    return {
-                        ...p,
-                        colorValues: {
-                            ...p.colorValues,
-                            [component]: value,
-                        },
-                    };
-                }
-                return p;
-            }),
-        );
+        const nextPatterns = patterns.map((p) => {
+            if (p.id === id) {
+                return {
+                    ...p,
+                    colorValues: {
+                        ...p.colorValues,
+                        [component]: value,
+                    },
+                };
+            }
+            return p;
+        });
+
+        setPatterns(nextPatterns);
 
         // Debounce URL update for slider interactions
-        debouncedUpdateURL();
+        debouncedUpdateURL(nextPatterns);
     };
 
     const generateCSS = (): void => {
@@ -215,13 +223,38 @@ export default function ColorPatternGenerator(): React.ReactElement {
         patterns.forEach((pattern) => {
             const { name, colorSpace, colorValues, baseModifier, hueShift } = pattern;
             const color = formatColor(colorSpace, colorValues);
+
+            // Non-oklch output: convert every color to the chosen space and emit
+            // fixed values, usable where oklch/relative color syntax isn't supported
+            if (outputColorSpace !== "oklch") {
+                const baseOklch = getPatternColorAsOklch(pattern);
+                const baseColor =
+                    colorSpace === outputColorSpace || !baseOklch
+                        ? color
+                        : formatOklchForSpace(baseOklch, outputColorSpace);
+
+                css += `  --${name}: ${baseColor};\n`;
+                cssVars[`--${name}`] = baseColor;
+
+                SHADE_STEPS.forEach((i) => {
+                    const shade = computeScaleOklch(pattern, i);
+                    const shadeColor = shade ? formatOklchForSpace(shade, outputColorSpace) : baseColor;
+                    const variableName = `--${name}-${i}`;
+
+                    css += `  ${variableName}: ${shadeColor};\n`;
+                    cssVars[variableName] = shadeColor;
+                });
+
+                css += "\n";
+                return;
+            }
             const lightnessAnchor = getPatternLightnessAnchor(pattern);
             const lightnessAnchorPercent = (lightnessAnchor * 100).toFixed(2);
 
             // Compute fallback oklch string to ensure hue is never `none`
             const baseOklchColor = getPatternColorAsOklch(pattern);
-            const baseOklchStr = baseOklchColor 
-                ? `oklch(${(baseOklchColor.l * 100).toFixed(1)}% ${baseOklchColor.c.toFixed(3)} ${baseOklchColor.h.toFixed(0)})`
+            const baseOklchStr = baseOklchColor
+                ? `oklch(${formatComponentValue(baseOklchColor.l * 100, 1, 2)}% ${formatComponentValue(baseOklchColor.c, 3, 4)} ${formatComponentValue(baseOklchColor.h, 0, 2)})`
                 : color;
 
             css += `  --${name}: ${color};\n`;
@@ -276,15 +309,14 @@ export default function ColorPatternGenerator(): React.ReactElement {
     };
 
     const fitPatternToGamut = (id: number, target: "srgb" | "p3"): void => {
-        setPatterns((prevPatterns) =>
-            prevPatterns.map((p) => {
-                if (p.id === id) {
-                    return autoFitPatternToGamut(p, target);
-                }
-                return p;
-            })
-        );
-        debouncedUpdateURL();
+        const nextPatterns = patterns.map((p) => {
+            if (p.id === id) {
+                return autoFitPatternToGamut(p, target);
+            }
+            return p;
+        });
+        setPatterns(nextPatterns);
+        debouncedUpdateURL(nextPatterns);
     };
 
     const addHarmonyPattern = (id: number, harmony: "complementary" | "analogous" | "split" | "triadic"): void => {
@@ -407,6 +439,8 @@ export default function ColorPatternGenerator(): React.ReactElement {
                             patterns={patterns}
                             onAddHarmonyPattern={addHarmonyPattern}
                             onFitGamut={fitPatternToGamut}
+                            outputColorSpace={outputColorSpace}
+                            onOutputColorSpaceChange={setOutputColorSpace}
                         />
                     ))}
                 </div>

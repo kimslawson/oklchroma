@@ -1,6 +1,7 @@
 import type { Pattern, ColorSpace } from "../types.ts";
 import { colorSpaceGroups } from "../utils/constants.ts";
 import ColorControls from "./color-controls.tsx";
+import EditableValue from "./editable-value.tsx";
 import ModifierCurveEditor from "./modifier-curve-editor.tsx";
 
 interface PatternEditorProps {
@@ -14,6 +15,8 @@ interface PatternEditorProps {
     patterns: Pattern[];
     onAddHarmonyPattern: (id: number, harmony: "complementary" | "analogous" | "split" | "triadic") => void;
     onFitGamut: (id: number, target: "srgb" | "p3") => void;
+    outputColorSpace: ColorSpace;
+    onOutputColorSpaceChange: (space: ColorSpace) => void;
 }
 
 export default function PatternEditor({
@@ -27,6 +30,8 @@ export default function PatternEditor({
     patterns,
     onAddHarmonyPattern,
     onFitGamut,
+    outputColorSpace,
+    onOutputColorSpaceChange,
 }: PatternEditorProps) {
     const supportsHueControls = ["oklch", "lch", "hsl", "hwb"].includes(pattern.colorSpace);
     const sourceHue = pattern.colorValues.h ?? 0;
@@ -117,10 +122,17 @@ export default function PatternEditor({
                         <label className="input-label">
                             Hue Shift <span className="input-label-note">across scale</span>
                         </label>
-                        <span className="control-value is-accent">
-                            {pattern.hueShift > 0 ? "+" : ""}
-                            {pattern.hueShift.toFixed(0)}&deg;
-                        </span>
+                        <EditableValue
+                            value={pattern.hueShift}
+                            min={-90}
+                            max={90}
+                            decimals={0}
+                            unit="°"
+                            accent
+                            disabled={!supportsHueControls}
+                            ariaLabel="Hue shift in degrees"
+                            onChange={(next) => onUpdatePattern(pattern.id, "hueShift", next)}
+                        />
                     </div>
                     <input
                         type="range"
@@ -214,6 +226,41 @@ export default function PatternEditor({
                         <span>Fit to Display P3</span>
                     </button>
                 </div>
+            </div>
+
+            {/* CSS Output color space */}
+            <div className="editor-card output-space-tools">
+                <h2 className="subtitle">CSS Output</h2>
+                <p className="input-help">
+                    Color space the generated CSS is written in, for use in places that don&apos;t support OKLCH
+                    yet.
+                </p>
+                <div className="color-space-selector">
+                    <label className="field" htmlFor={`output-space-${pattern.id}`}>
+                        <span className="field-prefix">Space</span>
+                        <select
+                            id={`output-space-${pattern.id}`}
+                            value={outputColorSpace}
+                            onChange={(e) => onOutputColorSpaceChange(e.target.value as ColorSpace)}
+                            className="field-control color-space-select"
+                        >
+                            {Object.entries(colorSpaceGroups).map(([group, spaces]) => (
+                                <optgroup key={group} label={group}>
+                                    {spaces.map((space) => (
+                                        <option key={space} value={space}>
+                                            {space}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            ))}
+                        </select>
+                    </label>
+                </div>
+                <p className="input-help">
+                    OKLCH (default) emits dynamic relative-color variables; other spaces emit fixed converted
+                    values. Colors outside a smaller target gamut (like hex or sRGB) are gamut-mapped, so
+                    wide-gamut shades may shift.
+                </p>
             </div>
         </div>
     );
