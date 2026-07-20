@@ -53,6 +53,28 @@ export function parseHexPair(text: string): number {
     return /^[0-9a-f]{1,2}$/i.test(trimmed) ? parseInt(trimmed, 16) : NaN;
 }
 
+// Combined #rrggbb field helpers: r/g/b channels packed into one 0xRRGGBB
+// number so the shared EditableValue component can drive all three at once
+export function encodeHexTriplet(r: number, g: number, b: number): number {
+    const clamp = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+    return (clamp(r) << 16) | (clamp(g) << 8) | clamp(b);
+}
+
+export function formatHexTriplet(value: number): string {
+    return `#${(value & 0xffffff).toString(16).padStart(6, "0")}`;
+}
+
+export function parseHexTriplet(text: string): number {
+    let trimmed = text.trim().replace(/^#/, "");
+    if (/^[0-9a-f]{3}$/i.test(trimmed)) {
+        trimmed = trimmed
+            .split("")
+            .map((ch) => ch + ch)
+            .join("");
+    }
+    return /^[0-9a-f]{6}$/i.test(trimmed) ? parseInt(trimmed, 16) : NaN;
+}
+
 function clamp01(value: number): number {
     return Math.max(0, Math.min(1, value));
 }

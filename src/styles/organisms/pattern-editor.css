@@ -184,6 +184,11 @@
 	color: var(--s-color-brand-primary);
 }
 
+/* Size the gamut fit picker to its three options instead of the card width */
+.gamut-tools .segmented {
+	align-self: flex-start;
+}
+
 .hue-shift-control,
 .chroma-floor-control {
 	display: flex;

@@ -112,7 +112,13 @@ export default function PatternEditor({
                     </div>
                 </div>
 
-                <ColorControls pattern={pattern} onColorValueChange={onUpdateColorValue} />
+                <ColorControls
+                    pattern={pattern}
+                    onColorValueChange={onUpdateColorValue}
+                    onColorValuesChange={(id, values) =>
+                        onUpdatePattern(id, "colorValues", { ...pattern.colorValues, ...values })
+                    }
+                />
 
                 <div className="hue-shift-control">
                     <p className="eyebrow-label">Scale Behaviour</p>
